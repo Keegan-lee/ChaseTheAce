@@ -2,7 +2,7 @@ pragma solidity ^0.5.0;
 
 contract Raffle {
 
-  address owner;
+  address payable public owner;
 
   // The pool of winning funds;
   uint256 public pot;
@@ -26,16 +26,30 @@ contract Raffle {
   bool public raffleOpen;
 
   // All participants must commit a number
-  mapping (address => PlayerCommit) commits;
+  mapping (address => PlayerCommit) public commits;
+
+  // Keep track of the addresses that reveal
+  address payable[] private revealers;
 
   // Keep track of refunds
-  mapping (address => bool) refunded;
+  mapping (address => bool) private refunded;
 
   // The number of reveals to wait for, before picking a winner
   uint256 private revealsNeeded;
 
   // The current number of reveals
   uint256 private numberOfReveals;
+
+  // @TODO Make this configurable
+  // There is an incentive as a user to reveal your commit, you get a refund.
+  // This is the percentage of your ticket price that gets refunded.
+  uint256 private revealRefund;
+
+  // The % of funds that are given to the winner
+  uint public raffleCut;
+
+  // The address of the parent tournament
+  address payable public tournamentAddress;
 
   struct PlayerCommit {
     bytes32 commit;
@@ -44,9 +58,14 @@ contract Raffle {
   }
 
   constructor(
-    uint256 _ticketPrice, bytes32 _commit, uint256 _revealsNeeded
+    address payable _owner,
+    address payable _tournamentAddress,
+    uint _ticketPrice,
+    bytes32 _commit,
+    uint _revealsNeeded,
+    uint _raffleCut
   ) public {
-    owner = msg.sender;
+    owner = _owner;
 
     // Set the ticket price
     ticketPrice = _ticketPrice;
@@ -54,7 +73,8 @@ contract Raffle {
     // Initialize the reveal variables
     revealsNeeded = _revealsNeeded;
     numberOfReveals = 0;
-    
+    revealRefund = 4;
+
     // Initialize the owners commit variables
     ownerCommit.commit = _commit;
     ownerCommit.revealed = false;
@@ -70,6 +90,14 @@ contract Raffle {
     // Open the raffle for play
     raffleOpen = true;
 
+    // The amount to keep for the winner of the current raffle
+    raffleCut = _raffleCut;
+
+    // The address of the parent tournament that the Raffle belongs to
+    tournamentAddress = _tournamentAddress;
+
+    emit OwnerCommit(ownerCommit.commit);
+    emit RaffleOpen(ticketPrice);
   }
 
 
@@ -78,27 +106,36 @@ contract Raffle {
   function closeRaffle(uint256 reveal)
   public
   onlyOwner
-  openRaffle
+  raffleIsOpen
   revealMatch(reveal)
   {
     raffleOpen = false;
     ownerCommit.reveal = reveal;
     ownerCommit.revealed = true;
+
+    emit RaffleClosed(pot);
   }
 
   /// @notice players are free to submit their reveals
-  ///          any player that submits their reveal will get a refund of 1 ticket
+  ///          any player that submits their reveal will get a refund of .25 ticket
   function submitReveal(uint256 reveal)
   public
-  closedRaffle
+  raffleIsClosed
   noWinner
+  needsMoreReveals
+  hasntAlreadyRevealed(msg.sender)
   revealMatch(reveal)
   {
     commits[msg.sender].revealed = true;
     commits[msg.sender].reveal = reveal;
-    pot -= ticketPrice;
+
+    revealers.push(msg.sender);
+
+    pot -= ticketPrice / revealRefund;
 
     numberOfReveals += 1;
+
+    emit PlayerReveal(msg.sender, numberOfReveals);
 
     if (numberOfReveals == revealsNeeded) {
       pickWinner();
@@ -110,20 +147,28 @@ contract Raffle {
   private
   noWinner
   {
+    uint256 tournamentCut = pot * ((100 - raffleCut) / 100);
     winningTicket = random();
     winnerPicked = true;
+    tournamentAddress.transfer(tournamentCut);
+    pot -= tournamentCut;
+
+    emit WinnerPicked(tickets[winningTicket], winningTicket);
   }
 
   /// @notice - Allows a player to issue a refund if they participated in a reveal
-  function withdraw()
+  function getRefund()
   public
   payable
   notOwner
   notRefunded
   hasRevealed
   {
+    uint256 refundAmount = ticketPrice / revealRefund;
     refunded[msg.sender] = true;
-    msg.sender.transfer(ticketPrice);
+    msg.sender.transfer(refundAmount);
+
+    emit RefundIssued(msg.sender, refundAmount);
   }
 
   /// @notice - This can be called by the winner to extract the winnings
@@ -136,17 +181,20 @@ contract Raffle {
   {
     winningsClaimed = true;
     msg.sender.transfer(pot);
+
+    emit WinningsClaimed(msg.sender, pot);
   }
 
   /// @notice Purchases a ticket for the msg.sender
   function buyTickets(bytes32 commit, uint256 numberOfTickets)
     public
     payable
-    openRaffle
+    notOwner
+    raffleIsOpen
     paidEnough(numberOfTickets)
     returns (uint256[] memory ticketNumbers)
   {
-    uint256[] memory userTickets = new uint256[](numberOfTickets);
+    uint[] memory userTickets = new uint[](numberOfTickets);
     commits[msg.sender].commit = commit;
     commits[msg.sender].revealed = false;
 
@@ -169,21 +217,28 @@ contract Raffle {
   // 6. N: A block.blockhash(block.number) is used to determine how many of the reveals to use to generate the random number
   // 7. XOR the first N reveals to get the random number
   function random() private view returns (uint256) {
-    return uint256(keccak256(abi.encodePacked(block.difficulty))) % tickets.length;
+    uint seed = 0;
+    for (uint i = 0; i < revealsNeeded; i++) {
+      seed += commits[revealers[i]].reveal;
+    }
+
+    seed += ownerCommit.reveal;
+
+    return (seed * uint256(keccak256(abi.encode(block.difficulty)))) % tickets.length;
   }
 
   function getHash(uint256 hashThis)
   public
   pure
   returns (bytes32 hashed) {
-    return keccak256(abi.encodePacked(hashThis));
+    return keccak256(abi.encode(hashThis));
   }
 
   modifier onlyOwner() {require(msg.sender == owner, "Caller must be the owner of the contract"); _;}
   modifier notOwner() {require(msg.sender != owner, "Caller must not be the owner"); _;}
 
-  modifier openRaffle() {require(raffleOpen, "Raffle is not open"); _;}
-  modifier closedRaffle() {require(!raffleOpen, "Raffle is open"); _;}
+  modifier raffleIsOpen() {require(raffleOpen, "Raffle is not open"); _;}
+  modifier raffleIsClosed() {require(!raffleOpen, "Raffle is open"); _;}
 
   modifier hasRevealed() {require(commits[msg.sender].revealed, "Player must have revealed"); _;}
 
@@ -194,6 +249,8 @@ contract Raffle {
   modifier isWinner() {require(tickets[winningTicket] == msg.sender, "Caller is not the winner of the raffle."); _;}
 
   modifier hasNotClaimedWinnings() {require(!winningsClaimed, "Cannot claim winnings more than once"); _;}
+
+  modifier needsMoreReveals() {require(numberOfReveals < revealsNeeded, "Maximum number of reveals has been reached"); _;}
 
   modifier revealMatch(uint256 reveal) {
     if (msg.sender == owner) {
@@ -207,4 +264,17 @@ contract Raffle {
     require(msg.value >= (numberOfTickets * ticketPrice), "Must pay full amount for number of requested tickets.");
     _;
   }
+
+  modifier hasntAlreadyRevealed(address payable revealer) {
+    require(!commits[revealer].revealed, "Revealer cannot have already revealed their commit"); _;
+  }
+
+  event OwnerCommit(bytes32 commit);
+  event OwnerReveal(uint256 reveal, bytes32 hashReveal);
+  event RaffleOpen(uint256 ticketPrice);
+  event RaffleClosed(uint256 rafflePot);
+  event WinnerPicked(address payable winner, uint256 winningTicket);
+  event RefundIssued(address payable refundedAddress, uint256 refundAmount);
+  event PlayerReveal(address player, uint256 numberOfReveals);
+  event WinningsClaimed(address payable winner, uint256 pot);
 }
