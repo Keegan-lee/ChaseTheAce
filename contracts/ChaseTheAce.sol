@@ -6,8 +6,9 @@ contract ChaseTheAce {
   address payable owner;
 
   uint constant public NUMBER_OF_CARDS = 52;
-  uint constant public RAFFLE_CUT = 45;
-  uint constant public JACKPOT_CUT = 45;
+  uint constant public RAFFLE_CUT = 2;
+  uint constant public JACKPOT_CUT = 2;
+  uint constant public REVEAL_REFUND = 2;
 
   // Keep track of the cards that were picked
   uint[] picks;
@@ -52,11 +53,12 @@ contract ChaseTheAce {
     raffles.push(
       new Raffle({
         _owner: owner,
-        _tournamentAddress: address(uint160(address(this))),
+        _chaseTheAceAddress: address(uint160(address(this))),
         _ticketPrice: _ticketPrice,
         _commit: _commit,
         _revealsNeeded: 5,
-        _raffleCut: RAFFLE_CUT
+        _raffleCut: RAFFLE_CUT,
+        _revealRefund: REVEAL_REFUND
       })
     );
 

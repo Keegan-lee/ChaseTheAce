@@ -3,7 +3,8 @@ const truffleAssert = require('truffle-assertions');
 
 const ticketPrice = 1000000000;
 const revealsNeeded = 5;
-const raffleCut = 20;
+const raffleCut = 2;
+const revealRefund = 2;
 
 let owner, tournmanetAddress;
 let mockCommit = web3.utils.soliditySha3(56);
@@ -11,15 +12,16 @@ let mockCommit = web3.utils.soliditySha3(56);
 contract('Raffle', accounts => {
   beforeEach(async () => {
     owner = accounts[0];
-    tournamentAddress = owner;
+    chaseTheAceAddress = owner;
 
     contractInstance = await Raffle.new(
       owner, // _owner
-      tournamentAddress, // _tournamentAddress
+      chaseTheAceAddress, // _chaseTheAceAddress
       ticketPrice, // _ticketPrice
       mockCommit, // _commit
       revealsNeeded, // _revealsNeeded
-      raffleCut // _raffleCut
+      raffleCut, // _raffleCut
+      revealRefund
     );
   });
 
@@ -27,14 +29,14 @@ contract('Raffle', accounts => {
     const priceCheck = await contractInstance.ticketPrice();
     const raffleCutCheck = await contractInstance.raffleCut();
     const ownerCheck = await contractInstance.owner();
-    const tournamentAddressCheck = await contractInstance.tournamentAddress();
+    const chaseTheAceAddressCheck = await contractInstance.chaseTheAceAddress();
 
     const raffleOpen = await contractInstance.raffleOpen();
 
     assert.equal(priceCheck, ticketPrice, 'ticketPrice does not match the value given to the constructor');
     assert.equal(raffleCutCheck, raffleCut, 'raffleCut does not match the value given to the constructor');
     assert.equal(ownerCheck, owner, 'owner does not match the value given to the constructor');
-    assert.equal(tournamentAddressCheck, tournamentAddress, 'tournamentAddress does not match the value given to the constructor');
+    assert.equal(chaseTheAceAddressCheck, chaseTheAceAddress, 'chaseTheAceAddress does not match the value given to the constructor');
     assert.equal(raffleOpen, true, 'The raffle is supposed to be open after initialization');
   });
 
@@ -118,12 +120,28 @@ contract('Raffle', accounts => {
     for (let i = 1; i <= numberOfPlayers; i++) {
       await contractInstance.buyTickets(mockCommit, 1, {from: accounts[i], value: ticketPrice});
     }
+
+    // await printTickets(contractInstance, numberOfPlayers);
+    // await printAccounts(accounts);
+
+    let pot = (await contractInstance.pot()).toNumber();
     
     await contractInstance.closeRaffle(56, { from: accounts[0] });
-    
+
+    pot /= raffleCut;
+
+    const potBeforeReveals = (await contractInstance.pot()).toNumber();
+
+    assert.equal(pot, potBeforeReveals, 'The pot should equal the number of players multiplied by tickerPrice');
+
     for (let i = 1; i < numberOfPlayers; i++) {
       await contractInstance.submitReveal(56, { from: accounts[i] });
+      pot -= (ticketPrice / revealRefund);
     }
+
+    const potAfterReveals = (await contractInstance.pot()).toNumber();
+
+    assert.equal(pot, potAfterReveals, 'Pot should equal total tickets tols, minus the refunds');
 
     for (let i = 1; i < numberOfPlayers; i++) {
       let userCommit = await contractInstance.commits(accounts[i]);
@@ -133,5 +151,34 @@ contract('Raffle', accounts => {
     const winnerPicked = await contractInstance.winnerPicked();
 
     assert.equal(winnerPicked, true, 'The winner was supposed to be picked after enough player reveals');
+
+    const winningTicket = (await contractInstance.winningTicket()).toNumber();
+
+    await contractInstance.claimWinnings({from: accounts[winningTicket + 1] });
+
+    assert.equal(winningTicket < numberOfPlayers, true, 'Winning Ticket must be between 0 and the number of players');
+
+    const winningsClaimed = await contractInstance.winningsClaimed();
+
+    assert.equal(winningsClaimed, true, 'The winnings are supposed to have been claimed');
+    
+    const contractBalance = await web3.eth.getBalance(contractInstance.address);
+
+    assert.equal(contractBalance, 0, 'After the winnings have been claimed, the contract should be drained');
   });
 });
+
+async function printTickets (contract, numberOfPlayers) {
+  console.log('----- printTickets()');
+  for (let i = 0; i < numberOfPlayers; i++) {
+    console.log(await contract.tickets(i));
+  }
+}
+
+async function printAccounts (accounts) {
+  console.log('----- printAccounts()');
+  console.log(`OWNER: ${accounts[0]}`);
+  for (let i = 1; i < accounts.length; i++) {
+    console.log(`User ${i}: ${accounts[i]}`);
+  }
+}
