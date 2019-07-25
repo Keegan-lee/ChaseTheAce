@@ -1,20 +1,26 @@
-const Factory = artifacts.require('ChaseTheAceFactory');
+const ChaseTheAceFactory = artifacts.require('ChaseTheAceFactory');
 
 contract('Factory', accounts => {
     beforeEach(async () => {
-        contractInstance = await Factory.new();
-        await Factory.deployed();
+        contractInstance = await ChaseTheAceFactory.new();
     });
 
-    it ('Can create multiple tournaments', async () => {
-        await contractInstance.createTournament({ from: accounts[0]});
-        await contractInstance.createTournament({ from: accounts[0]});
-        await contractInstance.createTournament({ from: accounts[0]});
-        await contractInstance.createTournament({ from: accounts[0]});
-        await contractInstance.createTournament({ from: accounts[0]});
-
-        assert.equal(await contractInstance.tournamentIndex(), 5);
+    // The purpose of this test is to make sure that a single game can be created and queried from the array
+    it ('Can create a single game without revert', async () => {
+      await contractInstance.createGame({ from: accounts[0]});
+      await contractInstance.games(0);
     });
 
-    
+    // The purpose of this test is to make sure that multiple games can be created and queried from the array
+    it ('Can create multiple games without revert', async () => {
+        const numberOfGames = 5;
+
+        for (let i = 0; i < numberOfGames; i++) {
+          await contractInstance.createGame({ from: accounts[0]});
+        }
+
+        for (let i = 0; i < numberOfGames; i++) {
+          await contractInstance.games(i);
+        }
+    });
 });

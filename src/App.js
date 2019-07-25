@@ -1,11 +1,20 @@
 import React, { Component } from 'react';
 import { Layout, Icon, Menu } from 'antd';
 import { BrowserRouter as Router, Route, Link } from 'react-router-dom';
-import ChaseTheAce from './contracts/ChaseTheAce.json';
+import ChaseTheAceFactory from './contracts/ChaseTheAceFactory.json';
+
+import Loading from './components/Loading';
 
 import './App.scss';
 
 import getWeb3 from './utils/getWeb3';
+
+import Home from './components/Home';
+import Admin from './components/Admin';
+
+import {connect} from 'react-redux';
+import {bindActionCreators} from 'redux';
+import {AppActions} from './store/actions';
 
 const { Sider, Header, Content } = Layout;
 
@@ -15,10 +24,9 @@ class App extends Component {
     super(props);
     this.state = {
       web3: null,
-      accounts: null,
       contract: null,
       collapsed: false,
-      winningNumber: 0
+      loading: true
     };
   }
 
@@ -27,41 +35,40 @@ class App extends Component {
       // Get network provider and web3 instance.
       const web3 = await getWeb3();
 
+      this.props.setWeb3(web3);
+
       // Use web3 to get the user's accounts.
       const accounts = await web3.eth.getAccounts();
-      web3.eth.defaultAccount = accounts[0];
+      web3.eth.defaultAccount = web3.utils.toChecksumAddress(accounts[0]);
+      this.props.setAccounts(accounts);
+      this.props.setSelf(accounts[0]);
+
+      web3.currentProvider.publicConfigStore.on('update', ({ selectedAddress }) => {
+        this.props.setSelf(web3.utils.toChecksumAddress(selectedAddress));
+      });
 
       // Get the contract instance.
       const networkId = await web3.eth.net.getId();
-      const deployedNetwork = ChaseTheAce.networks[networkId];
+      const deployedNetwork = ChaseTheAceFactory.networks[networkId];
 
       const instance = new web3.eth.Contract(
-        ChaseTheAce.abi,
+        ChaseTheAceFactory.abi,
         deployedNetwork && deployedNetwork.address
       );
-      // Set web3, accounts, and contract to the state, and then proceed with an
-      // example of interacting with the contract's methods.
-      this.setState({ web3, accounts, contract: instance }, this.init);
+
+      this.props.setContract(instance);
+
+      setTimeout(() => this.setState({
+        loading: false
+      }), 1000);
+      
     } catch (error) {
       // Catch any errors for any of the above operations.
+      console.error(error);
       alert(
         `Failed to load web3, accounts, or contract. Check console for details.`,
       );
     }
-  }
-
-  init = async () => {
-    const { contract } = this.state;
-
-    contract.events.DiceRoll((err, res) => {
-      console.log('----- DiceRoll');
-      console.log(err);
-      console.log(res);
-    });
-
-    await contract.methods.roll().send(
-      { from: this.state.contract.defaultAccount }
-    );
   }
 
   toggle = () => {
@@ -70,31 +77,31 @@ class App extends Component {
     });
   }
 
+  isOwner = () => {
+    return this.props.self === this.props.owner;
+  }
+
   render() {
     return (
       <Router>
+        { this.state.loading ? 
+        <Loading /> :
         <Layout>
           <Sider trigger={null} collapsible collapsed={this.state.collapsed}>
-            <div className='logo' />
+            <div className='connectedAccount'>
+              <span>{ this.props.self }</span>
+            </div>
             <Menu theme='dark' mode='inline' defaultSelectedKeys={['1']}>
               <Menu.Item className='menuLink' key='1'>
-                <Icon type='user' />
-                <span><Link to='/'>Main</Link></span>
+                <Icon type='play-circle' />
+                <span><Link to='/'>Play</Link></span>
               </Menu.Item>
-              {
+              { this.isOwner() &&
                 <Menu.Item className='menuLink' key='2'>
-                  <Icon type='video-camera' />
-                  <span><Link to='/admin'>Admin</Link></span>
+                  <Icon type='crown' />
+                  <span><Link to='/admin'>Manage</Link></span>
                 </Menu.Item>
               }
-              <Menu.Item className='menuLink' key='3'>
-                <Icon type='upload' />
-                <span><Link to='/issues'>Issues</Link></span>
-              </Menu.Item>
-              <Menu.Item className='menuLink' key='4'>
-                <Icon type='download' />
-                <span><Link to='/distro'>Distribution</Link></span>
-              </Menu.Item>
             </Menu>
           </Sider>
           <Layout>
@@ -113,13 +120,31 @@ class App extends Component {
                 minHeight: 280,
               }}
             >
-              Hello World: {this.state.winningNumber}
+              <Route exact path='/' component={Home}></Route>
+              <Route path='/admin' component={Admin}></Route>
             </Content>
           </Layout>
         </Layout>
+        }
       </Router>
     );
   }
 }
 
-export default App;
+const mapStateToProps = state => {
+  return { 
+    accounts: state.app.accounts,
+    contract: state.app.contract,
+    owner: state.app.owner,
+    self: state.app.self
+  };
+};
+
+const mapDispatchToProps = (dispatch) => bindActionCreators({
+  setAccounts: AppActions.setAccounts,
+  setContract: AppActions.setContract,
+  setWeb3: AppActions.setWeb3,
+  setSelf: AppActions.setSelf
+}, dispatch);
+
+export default connect(mapStateToProps, mapDispatchToProps)(App);

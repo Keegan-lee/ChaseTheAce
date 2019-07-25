@@ -1,43 +1,34 @@
 pragma solidity ^0.5.0;
 
-/**
-* 
-* A function that produces ChaseTheAce contracts.
-* Owner of the new contract is the owner of the factory contract.
-*
- */
+import './ChaseTheAce.sol';
 
- import './ChaseTheAce.sol';
-
+/// @title  A factory contract that creates ChaseTheAce games
+/// @author Keegan Lee Francis keegan@atlantic-blockchain.com
+/// @notice This contract has a sole purpose of keeping track of ChaseTheAce contracts deployed through the factory
 contract ChaseTheAceFactory {
 
   address payable public owner;
-  // ChaseTheAce[] private tournament;
-  mapping (uint => ChaseTheAce) public tournaments;
-  address tournamentContract;
-  uint public tournamentIndex = 0;
+  // Keep track of ChaseTheAce games
+  ChaseTheAce[] public games;
 
+  /// @notice Creates the contract and sets the owner
   constructor() public {
     owner = msg.sender;
   }
 
-  function createTournament()
+  /// @notice Creates a game and pushes it into the games array
+  function createGame()
   public
   onlyOwner
   {
-    tournaments[tournamentIndex] = new ChaseTheAce(owner);
-    emit TournamentDetails(
-      (msg.sender),
-      address((tournaments[tournamentIndex])),
-      (tournamentIndex)
-      );
-    tournamentIndex ++;
+    games.push(new ChaseTheAce(owner));
+    emit GameDetails(
+      address((games[games.length - 1]))
+    );
   }
 
-  event TournamentDetails(
-    address factoryHost,
-    address tournamentContractAddress,
-    uint totalIssuedTournaments
+  event GameDetails(
+    address gameAddress
   );
 
   modifier onlyOwner() {require(msg.sender == owner, "Caller must be the owner of the contract"); _;}

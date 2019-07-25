@@ -2,8 +2,11 @@ pragma solidity ^0.5.0;
 
 import "./SafeMath.sol";
 
+/// @title  A contract that facilitates a single Raffle draw
+/// @author Keegan Lee Francis keegan@atlantic-blockchain.com
+/// @notice The contract facilitates a raffle tournament. From selling of tickets, to distribution of winnings.
+/// @dev    This contract uses a commit/reveal scheme to select the winning ticket. The winner gets to "select" a random card from the deck.
 contract Raffle {
-
   using SafeMath for uint;
 
   address payable public owner;
@@ -19,6 +22,7 @@ contract Raffle {
   // Tickets are bought and stored in an array of addresses.
   // One address can buy multiple tickets
   address payable[] public tickets;
+  uint public numberOfTicketsSold;
 
   // Owner of the contract must commit
   PlayerCommit private ownerCommit;
@@ -29,6 +33,9 @@ contract Raffle {
   // Boolean to open/close the market
   bool public raffleOpen;
 
+  // Boolean to keep track of whether or not users can issue themselves a refund in the event of an emergency stop
+  bool private issueRefund;
+
   // All participants must commit a number
   mapping (address => PlayerCommit) public commits;
 
@@ -37,6 +44,7 @@ contract Raffle {
 
   // Keep track of refunds
   mapping (address => bool) private refunded;
+  mapping (address => bool) private emergencyRefund;
 
   // The number of reveals to wait for, before picking a winner
   uint private revealsNeeded;
@@ -51,7 +59,7 @@ contract Raffle {
   // The % of funds that are given to the winner
   uint public raffleCut;
 
-  // The address of the parent tournament
+  // The address of the parent game
   address payable public chaseTheAceAddress;
 
   struct PlayerCommit {
@@ -60,6 +68,14 @@ contract Raffle {
     bool revealed;
   }
 
+  /// @notice                     Create and initialize a Raffle
+  /// @param _owner               The owner of the contract
+  /// @param _chaseTheAceAddress  The address of the parent ChaseTheAce contract
+  /// @param _ticketPrice         The price of each raffle ticket
+  /// @param _commit              A commit hash to be used later for selecting the winning ticket
+  /// @param _revealsNeeded       The number of players needed to reveal their commit, before the winning ticket is selected
+  /// @param _raffleCut           The amount of ETH to keep as the winnings for the raffle
+  /// @param _revealRefund        The amount of money to refund if a player reveals their commit
   constructor(
     address payable _owner,
     address payable _chaseTheAceAddress,
@@ -92,13 +108,16 @@ contract Raffle {
     winnerPicked = false;
     winningsClaimed = false;
 
+    // Initialize the number of tickets sold to 0
+    numberOfTicketsSold = 0;
+
     // Open the raffle for play
     raffleOpen = true;
 
     // The amount to keep for the winner of the current raffle
     raffleCut = _raffleCut;
 
-    // The address of the parent tournament that the Raffle belongs to
+    // The address of the parent game that the Raffle belongs to
     chaseTheAceAddress = _chaseTheAceAddress;
 
     emit OwnerCommit(ownerCommit.commit);
@@ -106,10 +125,13 @@ contract Raffle {
   }
 
 
-  /// @notice This function is called by the owner of the contract when the
-  ///           current round has ended
+  /// @notice       This function is called by the owner of the contract when the
+  ///                 current round has ended
+  /// @param reveal The owners reveal that matches the commit
+  /// @dev          This closes the raffle, and opens up players to be able to submit their reveal
   function closeRaffle(uint reveal)
   public
+  payable
   onlyOwner
   raffleIsOpen
   revealMatch(reveal)
@@ -125,8 +147,9 @@ contract Raffle {
     emit RaffleClosed(pot, chaseTheAceCut);
   }
 
-  /// @notice players are free to submit their reveals
-  ///          any player that submits their reveal will get a refund of 25% ticket
+  /// @notice       players are free to submit their reveals
+  ///                 any player that submits their reveal will get a refund of 25% ticket
+  /// @param reveal the reveal that matches the users commit
   function submitReveal(uint reveal)
   public
   raffleIsClosed
@@ -155,7 +178,8 @@ contract Raffle {
     }
   }
 
-  /// @notice - Select a random number to be the winner
+  /// @notice Select a random number to be the winner
+  /// @dev    Selects the winner from the list of possible tickets
   function pickWinner()
   private
   noWinner
@@ -166,7 +190,8 @@ contract Raffle {
     emit WinnerPicked(tickets[winningTicket], winningTicket, pot);
   }
 
-  /// @notice - Allows a player to issue a refund if they participated in a reveal
+  /// @notice Allows a player to issue a refund if they participated in a reveal
+  /// @dev    The refund is there to incentivize users to submit a reveal
   function getRefund()
   public
   payable
@@ -181,7 +206,8 @@ contract Raffle {
     emit RefundIssued(msg.sender, refundAmount);
   }
 
-  /// @notice - This can be called by the winner to extract the winnings
+  /// @notice This can be called by the winner to extract the winnings
+  /// @dev    The winner of the raffle needs to call this function to withdraw their winnings
   function claimWinnings()
   public
   payable
@@ -195,7 +221,10 @@ contract Raffle {
     emit WinningsClaimed(msg.sender, pot);
   }
 
-  /// @notice Purchases a ticket for the msg.sender
+  /// @notice                 Purchases a ticket for the msg.sender
+  /// @param commit           A hash of a number that is used to generate a random number later
+  /// @param numberOfTickets  The number of tickets the user wants to buy
+  /// @dev                    The number of ETH sent to this contract needs to be numberOfTickets * ticketPrice
   function buyTickets(bytes32 commit, uint numberOfTickets)
     public
     payable
@@ -213,6 +242,7 @@ contract Raffle {
       userTickets[i] = tickets.push(msg.sender);
     }
 
+    numberOfTicketsSold = numberOfTicketsSold.add(numberOfTickets);
     pot = pot.add(msg.value);
 
     return userTickets;
@@ -237,11 +267,38 @@ contract Raffle {
     return (seed * (uint(keccak256(abi.encode(block.difficulty))))).mod(tickets.length);
   }
 
+  /// @notice Takes a number and gives the keccak256 hash of that number
+  /// @param hashThis The number to hash
+  /// @return hashed The hashed number
   function getHash(uint hashThis)
   public
   pure
   returns (bytes32 hashed) {
     return keccak256(abi.encode(hashThis));
+  }
+
+  /// @notice Emergency stop function
+  function circuitBreaker()
+  public
+  onlyOwner
+  {
+    raffleOpen = false;
+    issueRefund = true;
+  }
+
+  /// @notice This is tied to the circuitBreaker. This is how people can retreive their funds if the circuitBreaker is called
+  function requestRefund()
+    public
+    payable
+    refundAvailable
+  {
+    msg.sender.transfer(ticketPrice);
+  }
+
+  modifier refundAvailable() {
+    require(issueRefund, "Refunds must be available");
+    require(emergencyRefund[msg.sender] == false, "Caller must not have already received a refund");
+    _;
   }
 
   modifier onlyOwner() {require(msg.sender == owner, "Caller must be the owner of the contract"); _;}
@@ -256,7 +313,7 @@ contract Raffle {
 
   modifier notRefunded() {require(refunded[msg.sender] == false, "Address has already been refunded"); _;}
 
-  modifier isWinner() {require(tickets[winningTicket] == msg.sender, "Caller is not the winner of the raffle."); _;}
+  modifier isWinner() {require(tickets[winningTicket] == msg.sender, "Caller is not the winner of the raffle"); _;}
 
   modifier hasNotClaimedWinnings() {require(!winningsClaimed, "Cannot claim winnings more than once"); _;}
 

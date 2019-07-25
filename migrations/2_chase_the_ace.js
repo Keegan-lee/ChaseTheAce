@@ -1,5 +1,5 @@
-const ChaseTheAce = artifacts.require('./ChaseTheAceFactory.sol');
+const ChaseTheAceFactory = artifacts.require('./ChaseTheAceFactory.sol');
 
 module.exports = function(deployer) {
-  return deployer.deploy(ChaseTheAce);
+  return deployer.deploy(ChaseTheAceFactory);
 };
