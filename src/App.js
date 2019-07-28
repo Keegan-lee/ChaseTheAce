@@ -1,6 +1,6 @@
 import React, { Component } from 'react';
 import { Layout, Icon, Menu } from 'antd';
-import { BrowserRouter as Router, Route, Link } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Link, withRouter } from 'react-router-dom';
 import ChaseTheAceFactory from './contracts/ChaseTheAceFactory.json';
 
 import Loading from './components/Loading';
@@ -9,12 +9,16 @@ import './App.scss';
 
 import getWeb3 from './utils/getWeb3';
 
+import {toEther} from './utils/web3helper';
+
 import Home from './components/Home';
 import Admin from './components/Admin';
 
 import {connect} from 'react-redux';
 import {bindActionCreators} from 'redux';
 import {AppActions} from './store/actions';
+import handle from './store/eventHandler';
+import { GAME_DETAILS } from './store/eventTypes.js';
 
 const { Sider, Header, Content } = Layout;
 
@@ -42,9 +46,17 @@ class App extends Component {
       web3.eth.defaultAccount = web3.utils.toChecksumAddress(accounts[0]);
       this.props.setAccounts(accounts);
       this.props.setSelf(accounts[0]);
+      this.props.setBalance(toEther(web3, await web3.eth.getBalance(accounts[0])));
 
-      web3.currentProvider.publicConfigStore.on('update', ({ selectedAddress }) => {
+      web3.currentProvider.publicConfigStore.on('update', async ({ selectedAddress }) => {
         this.props.setSelf(web3.utils.toChecksumAddress(selectedAddress));
+        this.props.setBalance(toEther(web3, await web3.eth.getBalance(selectedAddress)));
+
+        if (this.isOwner()) {
+          this.props.history.push('/admin');
+        } else {
+          this.props.history.push('/');
+        }
       });
 
       // Get the contract instance.
@@ -57,6 +69,10 @@ class App extends Component {
       );
 
       this.props.setContract(instance);
+
+      console.log(instance);
+
+      handle(instance.events.GameDetails, GAME_DETAILS, this.props.addGame);
 
       setTimeout(() => this.setState({
         loading: false
@@ -90,6 +106,7 @@ class App extends Component {
           <Sider trigger={null} collapsible collapsed={this.state.collapsed}>
             <div className='connectedAccount'>
               <span>{ this.props.self }</span>
+              <span>{ this.props.balance }</span>
             </div>
             <Menu theme='dark' mode='inline' defaultSelectedKeys={['1']}>
               <Menu.Item className='menuLink' key='1'>
@@ -136,7 +153,8 @@ const mapStateToProps = state => {
     accounts: state.app.accounts,
     contract: state.app.contract,
     owner: state.app.owner,
-    self: state.app.self
+    self: state.app.self,
+    balance: state.app.balance
   };
 };
 
@@ -144,7 +162,9 @@ const mapDispatchToProps = (dispatch) => bindActionCreators({
   setAccounts: AppActions.setAccounts,
   setContract: AppActions.setContract,
   setWeb3: AppActions.setWeb3,
-  setSelf: AppActions.setSelf
+  setSelf: AppActions.setSelf,
+  setBalance: AppActions.setBalance,
+  addGame: AppActions.addGame
 }, dispatch);
 
-export default connect(mapStateToProps, mapDispatchToProps)(App);
+export default withRouter(connect(mapStateToProps, mapDispatchToProps)(App));

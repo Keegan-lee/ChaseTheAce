@@ -32,15 +32,18 @@
 
 .connectedAccount {
   display: flex;
-  height: 32px;
+  flex-direction: column;
+  height: 64px;
   background: rgba(255, 255, 255, 0.2);
   margin: 16px;
+
   span {
-    margin: auto;
     width: 100%;
+    margin: auto;
     overflow: hidden;
     text-overflow: ellipsis;
     color: white;
-    padding: 0 5px;
+    padding: 5px 10px;
+    font-size: .75rem;
   }
 }

@@ -1,4 +1,6 @@
-const path = require('path');
+const path = require("path");
+const HDWalletProvider = require("truffle-hdwallet-provider");
+const MNEUMONIC = "hurry distance hip various review level quiz fresh rapid zoo category match"
 
 /**
  * Use this file to configure your truffle project. It's seeded with some
@@ -48,6 +50,12 @@ module.exports = {
       host: "127.0.0.1",     // Localhost (default: none)
       port: 8545,            // Standard Ethereum port (default: none)
       network_id: "*"       // Any network (default: none)
+    },
+    ropsten: {
+      provider: function() {
+        return new HDWalletProvider(MNEUMONIC, "https://ropsten.infura.io/v3/fd0eac6757844809b3bf59a8fa3788c7")
+      },
+      network_id: 3
     }
 
     // Another network with more advanced options...

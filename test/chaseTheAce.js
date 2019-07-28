@@ -74,7 +74,7 @@ contract('ChaseTheAce', accounts => {
    * The most basic functionality is that a player can purchase a ticket from the raffle.
    * This test makes sure that enough ETH was collected and the ticket was paid for
    */
-  it('A single player can purchase a ticket from the Raffle', async () => {
+  it('A single player can purchase a ticket from the Raffle, through ChaseTheAce', async () => {
     await raffle.buyTickets(mockCommit, 1, { from: accounts[1], value: ticketPrice });
     const pot = (await raffle.pot()).toNumber();
     const ticketOne = await raffle.tickets(0);
@@ -198,6 +198,7 @@ contract('ChaseTheAce', accounts => {
    * This test makes sure that the winner of the jackpot can claim their winnings
    */
   it ('can pick cards until there is a winner', async () => {
+    console.log('This test may take a while ...');
     for (let c = 0; c < 52; c++) {
 
       if (c > 0) {
@@ -229,6 +230,10 @@ contract('ChaseTheAce', accounts => {
       await contractInstance.ownerReveal(56, {from : owner });
 
       const pick = (await contractInstance.picks(c)).toNumber();
+
+      if (c % 10 === 0) {
+        console.log(`---- has picked ${c} cards so far, no winner, please wait`);
+      }
       
       if (pick === 0) {
         const CTAWinner = await contractInstance.winner();

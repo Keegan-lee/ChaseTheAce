@@ -87,7 +87,7 @@ contract ChaseTheAce {
 
     // Set the current raffle to the index of the last raffle in the array
     currentRaffle = raffles.length - 1;
-    emit NewRaffle(address(raffles[currentRaffle]));
+    emit NewRaffle(address(raffles[currentRaffle]), currentRaffle);
   }
 
   /// @notice This function is called after the currentRaffle has ended, in order to properly seed a random number to pick a card from the deck
@@ -242,5 +242,5 @@ contract ChaseTheAce {
 
   event Win(address winner, uint jackpot);
   event NotWin();
-  event NewRaffle(address raffle);
+  event NewRaffle(address raffle, uint numberOfRaffles);
 }

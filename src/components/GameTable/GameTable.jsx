@@ -50,6 +50,10 @@ class GameTable extends Component {
           dataIndex: 'index',
           key: 'index'
         }, {
+          title: 'Price per Ticket',
+          dataIndex: 'price',
+          key: 'price'
+        }, {
           title: 'Tickets Sold',
           dataIndex: 'tickets',
           key: 'tickets'
@@ -83,17 +87,17 @@ class GameTable extends Component {
   }
 
   renderRaffleTable = raffles => {
-    console.log('----- renderRaffleTable()');
-    console.log(raffles);
+    const { web3 } = this.props;
     const columns = this.state.raffleColumns;
     let data = [];
     _.map(raffles, (r, index) => {
-      const { ticketsSold, pot, winner, winnerPicked } = r;
+      const { ticketsSold, pot, winner, winnerPicked, ticketPrice } = r;
       data.push({
         index,
-        pot: toEther(this.props.web3, pot),
+        pot: toEther(web3, pot),
         tickets: ticketsSold,
         winner: winnerPicked ? winner : '--',
+        price: toEther(web3, ticketPrice),
         key: index
       });
     });
@@ -101,118 +105,135 @@ class GameTable extends Component {
   }
 
   renderAdminPanel(record) {
-    console.log('----- renderAdminPanel');
-    console.log(record);
-
     const currentRaffle = record.raffles[record.raffles.length - 1];
 
     return (
       <Col span={24}>
-        <Button
-          type='primary'
-          onClick={() => createRaffle(record.game, this.props.self)}
-        >
-          Create Raffle
-        </Button>
+        <Row className='panel'>
+          <Col span={12} className='operations'>
+            <p>Current Raffle operations</p>
+            <div className='buttonContainer'>
+              <Button
+                type='primary'
+                onClick={() => createRaffle(record.game, this.props.self)}
+              >
+                Create Raffle
+              </Button>
 
-        <Button
-          type='primary'
-          onClick={() => closeRaffle(currentRaffle, this.props.self)}
-        >
-          Close Raffle
-        </Button>
+              <Button
+                type='primary'
+                onClick={() => closeRaffle(currentRaffle, this.props.self)}
+              >
+                Close Current Raffle
+              </Button>
+            </div>
+          </Col>
 
-        <Button
-          type='primary'
-          onClick={() => ownerCommit(
-            record.game,
-            RAFFLE_DEFAULTS.commit,
-            this.props.self
-          )}
-        >
-          Submit Commit
-        </Button>
+          <Col span={12} className='operations'>
+            <p>Chase The Ace card selection operations</p>
+            <div className='buttonContainer'>
+              <Button
+                type='primary'
+                onClick={() => ownerCommit(
+                  record.game,
+                  RAFFLE_DEFAULTS.commit,
+                  this.props.self
+                )}
+              >
+                Submit Commit
+              </Button>
 
-        <Button
-          type='primary'
-          onClick={() => ownerReveal(
-            record.game,
-            RAFFLE_DEFAULTS.reveal,
-            this.props.self
-          )}
-        >
-          Submit Reveal
-        </Button>
+              <Button
+                type='primary'
+                onClick={() => ownerReveal(
+                  record.game,
+                  RAFFLE_DEFAULTS.reveal,
+                  this.props.self
+                )}
+              >
+                Submit Reveal
+              </Button>
+            </div>
+          </Col>
+        </Row>
       </Col>
     );
   }
 
   // @TODO - Allow the user to alter their commit
   renderUserPanel(game) {
-    console.log('----- renderUserPanel()');
-    console.log(game);
-
     const currentRaffle = game.raffles[game.raffles.length - 1];
+
+    if (!currentRaffle) return;
 
     return (
       <Col span={24}>
-        <InputNumber
-          value={this.state.numberOfTickets[game.gameIndex]}
-          onChange={this.changeNumberOfTickets.bind(this, game.gameIndex)}
-        />
-        <Button
-          type='primary'
-          onClick={() => buyTickets(
-            currentRaffle,
-            RAFFLE_DEFAULTS.commit,
-            this.state.numberOfTickets,
-            this.props.self
-          )}
-          disabled={!currentRaffle.raffleOpen}
-        >
-          Buy Tickets
-        </Button>
+        <Row className='panel'>
+          <Col span={12} className='operations'>
+            <p>Current Raffle Operations</p>
+            <div className='buttonContainer'>
+              <InputNumber
+                value={this.state.numberOfTickets[game.gameIndex]}
+                onChange={this.changeNumberOfTickets.bind(this, game.gameIndex)}
+              />
+              <Button
+                type='primary'
+                onClick={() => buyTickets(
+                  currentRaffle,
+                  RAFFLE_DEFAULTS.commit,
+                  this.state.numberOfTickets,
+                  this.props.self
+                )}
+                disabled={!currentRaffle.raffleOpen}
+              >
+                Buy Tickets
+            </Button>
+              <Button
+                type='primary'
+                onClick={() => submitReveal(
+                  currentRaffle,
+                  RAFFLE_DEFAULTS.reveal,
+                  this.props.self
+                )}
+                disabled={currentRaffle.raffleOpen || currentRaffle.winnerPicked}
+              >
+                Submit Reveal
+            </Button>
+            </div>
+          </Col>
 
-        <Button
-          type='primary'
-          onClick={() => submitReveal(
-            currentRaffle,
-            RAFFLE_DEFAULTS.reveal,
-            this.props.self
-          )}
-          disabled={currentRaffle.raffleOpen || currentRaffle.winnerPicked}
-        >
-          Submit Reveal
-        </Button>
+          <Col span={12} className='operations'>
+            <p>Chase the Ace Card Selection Operations</p>
+            <div className='buttonContainer'>
+              <Button
+                type='primary'
+                onClick={() => playerCommit(
+                  game.game,
+                  RAFFLE_DEFAULTS.commit,
+                  this.props.self
+                )}
+              >
+                Submit Commit
+              </Button>
 
-        <Button
-          type='primary'
-          onClick={() => playerCommit(
-            game.game,
-            RAFFLE_DEFAULTS.commit,
-            this.props.self
-          )}
-        >
-          Submit Commit
-        </Button>
-
-        <Button
-          type='primary'
-          onClick={() => playerReveal(
-            game.game,
-            RAFFLE_DEFAULTS.reveal,
-            this.props.self
-          )}
-        >
-          Submit Reveal
-        </Button>
+              <Button
+                type='primary'
+                onClick={() => playerReveal(
+                  game.game,
+                  RAFFLE_DEFAULTS.reveal,
+                  this.props.self
+                )}
+              >
+                Submit Reveal
+              </Button>
+            </div>
+          </Col>
+        </Row>
       </Col>
     );
   }
 
   renderExpandedRow = record => {
-    console.log('----- renderExpandedRow()');
-    console.log(record);
 
     const panel = this.props.admin ? this.renderAdminPanel(record) : this.renderUserPanel(record);
 

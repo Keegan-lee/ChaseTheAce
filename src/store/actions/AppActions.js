@@ -1,7 +1,8 @@
 import * as actions from '../actionTypes';
 import _ from 'lodash';
 import ChaseTheAce from '../../contracts/ChaseTheAce.json';
-import Raffle from '../../contracts/Raffle.json';
+
+import {initRaffle} from  '../../utils/raffleFuntions';
 
 const NUMBER_OF_CARDS = 52;
 
@@ -14,16 +15,25 @@ class AppPrivateActions {
     return { type: actions.SET_CONTRACT, contract };
   }
 
-  static addGames(games) {
-    return { type: actions.ADD_GAMES, games };
+  static addGame(game) {
+    return { type: actions.ADD_GAME, game };
+  }
+
+  static addRaffle(index, raffle) {
+    return { type: actions.ADD_RAFFLE, index, raffle };
+  }
+
+  static updateNumberOfTickets(gameIndex, raffleIndex, tickets, pot) {
+    return { type: actions.UPDATE_NUMBER_OF_TICKETS, gameIndex, raffleIndex, tickets, pot };
   }
 }
 
-export default {
-  setAccounts(accounts) {
+class AppActions {
+  static setAccounts(accounts) {
     return { type: actions.SET_ACCOUNTS, accounts };
-  },
-  setContract(contract) {
+  }
+
+  static setContract(contract) {
     return (dispatch, getState) => {
       const web3 = getState().app.web3;
       dispatch(AppPrivateActions.setContract(contract));
@@ -33,11 +43,9 @@ export default {
       }, async (err, events) => {
         // @TODO - Handle Error
         // @TODO - Handle Events of different types
-
-        // Push games into a game array
-        let newGames = [];
+        let gameCount = 0;
         _.map(events, g => {
-          const index = parseInt(g.returnValues.numberOfGames) + 1;
+          let index = gameCount++;
           const address = g.returnValues.gameAddress;
 
           // Initialize the ABI for each ChaseTheAce contract
@@ -46,47 +54,23 @@ export default {
             address
           );
 
+          game.events.NewRaffle((err, res) => {
+            console.log('---- Old Game :: New Raffle');
+            let {raffle, numberOfRaffles} = res.returnValues;
+            dispatch(AppActions.addRaffle(index, numberOfRaffles, raffle));
+          });
+
           game.getPastEvents('allEvents', {
             fromBlock: 0,
             toBlock: 'latest'
-          }, async (err, events) => {
+          }, (err, events) => {
+            
             // @TODO - Handle the error
-            let raffles = []
-            _.map(events, async (r) => {
-              console.log('HERE');
-              console.log(r);
-              switch (r.event) {
+            _.map(events, async (res) => {
+              switch (res.event) {
                 case 'NewRaffle':
-                  let address = r.returnValues.raffle;
-                  let contract = new web3.eth.Contract(
-                    Raffle.abi,
-                    address
-                  );
-
-                  // @TODO - Handle Error if call for constants doesn't work
-                  const ticketPrice = await contract.methods.ticketPrice().call();
-                  const pot = await contract.methods.pot().call();
-                  const parentGame = await contract.methods.chaseTheAceAddress().call()
-                  const raffleCut = await contract.methods.raffleCut().call();
-                  const raffleOpen = await contract.methods.raffleOpen().call();
-                  const ticketsSold = await contract.methods.numberOfTicketsSold().call();
-                  const winningTicket = await contract.methods.winningTicket().call();
-                  const winnerPicked = await contract.methods.winnerPicked().call();
-                  const winner = !raffleOpen ? await contract.methods.tickets(parseInt(winningTicket)).call() : '--';
-
-                  raffles.push({
-                    contract,
-                    address,
-                    ticketPrice,
-                    pot,
-                    ticketsSold,
-                    parentGame,
-                    raffleCut,
-                    raffleOpen,
-                    winningTicket,
-                    winnerPicked,
-                    winner
-                  });
+                  let {raffle, numberOfRaffles} = res.returnValues;
+                  dispatch(AppActions.addRaffle(index, numberOfRaffles, raffle));
                   break;
                 default:
                   break;
@@ -95,7 +79,8 @@ export default {
 
             let gameIndex = 0;
             let winner = false;
-            newGames.push({
+
+            let newGame = {
               key: index,
               gameProgress: `${gameIndex} / ${NUMBER_OF_CARDS}`,
               gameIndex,
@@ -103,20 +88,70 @@ export default {
               address,
               winner,
               game,
-              raffles
-            });
-            dispatch(AppPrivateActions.addGames(newGames));
+              raffles: []
+            };
+            dispatch(AppPrivateActions.addGame(newGame));
           });
         });
-
-
       });
     };
-  },
-  setWeb3(web3) {
+  }
+
+  static setWeb3(web3) {
     return { type: actions.SET_WEB_3, web3 };
-  },
-  setSelf(self) {
+  }
+
+  static setSelf(self) {
     return { type: actions.SET_SELF, self };
   }
+
+  static setBalance(balance) {
+    return { type: actions.SET_BALANCE, balance};
+  }
+
+  static addGame(gameAddress) {
+    return (dispatch, getState) => {
+      const state = getState();
+      const web3 = state.app.web3;
+      const index = state.app.games.length;
+
+      let gameABI = new web3.eth.Contract(
+        ChaseTheAce.abi,
+        gameAddress
+      );
+      
+      // @TODO - Template a New Game in a constants file somewhere
+      let newGame = {
+        key: index,
+        gameProgress: `0 / ${NUMBER_OF_CARDS}`,
+        gameIndex: 0,
+        index,
+        address: gameAddress,
+        winner: false,
+        game: gameABI,
+        raffles: []
+      };
+
+      dispatch(AppPrivateActions.addGame(newGame));
+    }
+  }
+
+  static addRaffle(gameIndex, raffleIndex, raffleAddress) {
+    return async (dispatch, getState) => {
+      const web3 = getState().app.web3;
+      let raffle = await initRaffle(web3, raffleAddress);
+
+      console.log('----- addRaffle()');
+      console.log(raffle);
+
+      raffle.contract.events.TicketsBought((err, res) => {
+        let {numberOfTickets, pot} = res.returnValues;
+        dispatch(AppPrivateActions.updateNumberOfTickets(gameIndex, raffleIndex, numberOfTickets, pot));
+      });
+
+      dispatch(AppPrivateActions.addRaffle(gameIndex, raffle));
+    };
+  }
 }
+
+export default AppActions;

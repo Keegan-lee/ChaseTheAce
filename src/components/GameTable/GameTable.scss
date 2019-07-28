@@ -1,0 +1,33 @@
+.panel {
+  .operations {
+    display: flex;
+    text-align: center;
+    padding: 0px 15px;
+    flex-direction: column;
+
+    p {
+      width: 100%;
+      font-weight: bold;
+    }
+
+    hr {
+      width: 100%;
+    }
+
+
+    .buttonContainer {
+      display: flex;
+      justify-content: space-evenly;
+      border-top: 1px solid lightgrey;
+      border-bottom: 1px solid lightgrey;
+      align-items: center;
+      align-content: space-between;
+
+      Button {
+        margin: 10px 0;
+        flex-basis: auto;
+        width: 45%;
+      }
+    }
+  }
+}

@@ -245,6 +245,8 @@ contract Raffle {
     numberOfTicketsSold = numberOfTicketsSold.add(numberOfTickets);
     pot = pot.add(msg.value);
 
+    emit TicketsBought(numberOfTickets, pot);
+
     return userTickets;
   }
 
@@ -345,4 +347,5 @@ contract Raffle {
   event PlayerReveal(address player, uint numberOfReveals, uint pot);
   event WinningsClaimed(address payable winner, uint pot);
   event JackPotGrows(uint jackpotCut);
+  event TicketsBought(uint numberOfTickets, uint pot);
 }

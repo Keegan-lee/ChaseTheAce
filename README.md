@@ -1,37 +1,25 @@
 
 #Overview
 
-  
+This game has the notion of a Owner/Host account. Please use the seed.txt file and choose account[0] if you want to invoke functions only available to the Host/Owner.
+
+The mneumonic provided in seed.txt is not used on the ethereum main net. Please do not send Ether to this address. The menumonic is only for testing purposes on the Ropsten network.
 
 ## ChaseTheAce
 
 Classic Nova Scotia [Chase the Ace](https://en.wikipedia.org/wiki/Chase_the_Ace_(lottery)) Raffle game.
 
-  
-
 Chase the ace is a combination of a standard raffle game, played in conjuction with a deck of cards.
-
-  
 
 The game is as follows.
 
-  
-
 A maximum of 52 raffles are held. One for each card in a standard deck of cards. The goal is for the players to draw the Ace of Spades. The player that draws the Ace of Spades wins the jackpot.
-
-  
 
 The players only get to choose a card from the deck if they win a raffle. The entire game ends when the Ace of Spades is drawn from the deck.
 
-  
-
 Once a week, a raffle is held. 50% of the money collected is set aside for the jackpot. The remaining 50% of the money is won by the player that wins the raffle.
 
-  
-
 --
-
-  
 
 ## Chase the Ace on Ethereum
 
