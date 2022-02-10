@@ -9,7 +9,7 @@
     "craco-antd": "^1.10.0",
     "craco-less": "^1.7.0",
     "lodash": "^4.17.13",
-    "node-sass": "^4.12.0",
+    "node-sass": "^7.0.0",
     "react": "^16.8.6",
     "react-dom": "^16.8.6",
     "react-redux": "^7.1.0",
